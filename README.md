@@ -1,14 +1,3 @@
----
-title:  Smart Doc QA
-emoji: 📚
-colorFrom: blue
-colorTo: green
-sdk: gradio
-sdk_version: "4.16.0"
-app_file: app.py
-pinned: false
----
-
 # Smart Document Q&A Backend
 
 AI-powered document question answering system using RAG (Retrieval-Augmented Generation).
