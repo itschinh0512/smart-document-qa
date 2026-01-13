@@ -1,26 +1,52 @@
 ---
-title: Document Q&A Backend
+title:  Smart Doc QA
 emoji: 📚
 colorFrom: blue
 colorTo: green
-sdk:  docker
+sdk: gradio
+sdk_version: "4.16.0"
+app_file: app.py
 pinned: false
 ---
 
-# Document Q&A System Backend
+# Smart Document Q&A Backend
 
-Smart RAG-powered document question answering system with: 
-- 🤖 AI-powered intent classification
-- 🔍 Semantic search with vector embeddings
-- 💬 Natural language answers using Groq LLM
-- 📄 PDF document processing
+AI-powered document question answering system using RAG (Retrieval-Augmented Generation).
 
-## API Documentation
+## 🚀 Features
 
-Visit `/docs` for interactive API documentation.
+- **📄 PDF Processing**:  Extract and chunk documents intelligently
+- **🔍 Semantic Search**: Vector embeddings with ChromaDB
+- **🤖 Intent Classification**:  Smart query routing
+- **💬 AI Answers**: Powered by Groq LLM (llama-3.3-70b)
+- **📊 Source Citations**: Track which pages were used
 
-## Endpoints
+## 🏗️ Architecture
 
-- `POST /upload` - Upload PDF documents
-- `POST /ai-ask` - Ask questions about uploaded documents
-- `GET /health` - Health check
+### Multi-Agent System: 
+1. **Intent Classifier Agent** - Determines if query is about documents or general knowledge
+2. **Retrieval Agent** - Searches documents using semantic embeddings
+3. **Generation Agent** - Generates AI-powered answers with context
+
+### Tech Stack:
+- FastAPI
+- HuggingFace Embeddings (all-MiniLM-L6-v2)
+- ChromaDB Vector Database
+- Groq LLM API
+- pypdf for document processing
+
+## 📖 API Documentation
+
+Visit `/docs` for interactive Swagger UI documentation.
+
+## 🧪 Quick Test
+
+1. Upload PDF:  `POST /upload`
+2. Ask question: `POST /ai-ask`
+3. Get AI-powered answer with sources!
+
+## 👨‍💻 Developer
+
+Built by @polaris0512 for educational purposes.
+
+Demo Date: January 17, 2026
