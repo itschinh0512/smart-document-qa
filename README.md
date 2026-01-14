@@ -1,4 +1,4 @@
-# Smart Document Q&A Backend
+# Smart Document Q&A
 
 AI-powered document question answering system using RAG (Retrieval-Augmented Generation).
 
