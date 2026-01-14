@@ -1,41 +1,48 @@
-# Smart Document Q&A
+# Smart Document Q&A System
 
-AI-powered document question answering system using RAG (Retrieval-Augmented Generation).
+A full-stack intelligent document question-answering system using RAG (Retrieval-Augmented Generation) technology.
 
-## 🚀 Features
+## Project Structure
 
-- **📄 PDF Processing**:  Extract and chunk documents intelligently
-- **🔍 Semantic Search**: Vector embeddings with ChromaDB
-- **🤖 Intent Classification**:  Smart query routing
-- **💬 AI Answers**: Powered by Groq LLM (llama-3.3-70b)
-- **📊 Source Citations**: Track which pages were used
+```
+smart-document-qa/
+├── backend/          # Python/Flask backend with RAG
+├── frontend/         # React frontend
+├── LICENSE
+└── README.md
+```
 
-## 🏗️ Architecture
+## Tech Stack
 
-### Multi-Agent System: 
-1. **Intent Classifier Agent** - Determines if query is about documents or general knowledge
-2. **Retrieval Agent** - Searches documents using semantic embeddings
-3. **Generation Agent** - Generates AI-powered answers with context
+- **Backend**: Python, Flask, RAG (Retrieval-Augmented Generation)
+- **Frontend**: React, JavaScript
 
-### Tech Stack:
-- FastAPI
-- HuggingFace Embeddings (all-MiniLM-L6-v2)
-- ChromaDB Vector Database
-- Groq LLM API
-- pypdf for document processing
+## Quick Start
 
-## 📖 API Documentation
+### Backend Setup
 
-Visit `/docs` for interactive Swagger UI documentation.
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+python app.py
+```
 
-## 🧪 Quick Test
+### Frontend Setup
 
-1. Upload PDF:  `POST /upload`
-2. Ask question: `POST /ai-ask`
-3. Get AI-powered answer with sources!
+```bash
+cd frontend
+npm install
+npm start
+```
 
-## 👨‍💻 Developer
+## Documentation
 
-Built by @polaris0512 for educational purposes.
+- Backend API:  See [backend/docs_api.md](backend/docs_api.md)
+- Frontend:  See [frontend/README.md](frontend/README.md)
+- Backend:  See [backend/README.md](backend/README.md)
 
-Demo Date: January 17, 2026
+## License
+
+See [LICENSE](LICENSE) file for details. 
