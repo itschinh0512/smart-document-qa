@@ -335,9 +335,9 @@ class Generation_Agent:
     
     def generate_answer(self, question: str, top_k: int = 3):
         """
-        Generate an AI answer based on retrieved document context
+        Generate answer with inline citations
         """
-        try: 
+        try:
             # Check if documents exist
             if self.retrieval_agent.collection.count() == 0:
                 return {
@@ -345,64 +345,77 @@ class Generation_Agent:
                     "message": "No documents uploaded yet. Please upload a PDF first."
                 }
             
-            # Check if Groq API key is configured
-            if not os. getenv("GROQ_API_KEY"):
-                return {
-                    "status": "error",
-                    "message": "Groq API key not configured.  Please add GROQ_API_KEY to . env file."
-                }
-            
-            # Step 1: Retrieve context using retrieval agent
+            # Get relevant context
             retrieval_result = self.retrieval_agent.retrieve(
                 question=question,
                 top_k=top_k,
                 mode="context"
             )
             
-            if retrieval_result["status"] == "error":
+            if retrieval_result["status"] != "success":
                 return retrieval_result
             
             combined_context = retrieval_result["context"]
             sources = retrieval_result["sources"]
             
-            # Step 2: Create prompt for Groq
-            system_prompt = """You are a helpful AI assistant that answers questions based on provided document context. 
+            # Create numbered source references for the prompt
+            source_references = []
+            for i, source in enumerate(sources, 1):
+                source_references. append(
+                    f"[{i}] Page {source['page']} from {source['document']}"
+                )
+            source_list = "\n".join(source_references)
+            
+            # IMPROVED PROMPT with citation instructions
+            prompt = f"""You are a helpful AI assistant that answers questions based on provided document context. 
 
-Rules:
-1. Answer ONLY based on the provided context
-2. If the context doesn't contain the answer, say "I cannot find this information in the provided documents."
-3. Be concise and accurate
-4. Cite specific details from the context when possible
-5. If the question is unclear, ask for clarification"""
+    IMPORTANT INSTRUCTIONS:
+    1. Answer the question using ONLY the information from the provided context
+    2. Include inline citations using [1], [2], [3] format when referencing specific sources
+    3. Be specific and reference which pages contain the information
+    4. If the context doesn't contain enough information, say so clearly
+    5. Do not make up information not present in the context
 
-            user_prompt = f"""Context from documents:
-{combined_context}
+    CONTEXT FROM DOCUMENTS:
+    {combined_context}
 
-Question: {question}
+    AVAILABLE SOURCES:
+    {source_list}
 
-Please provide a clear and accurate answer based on the context above."""
+    USER QUESTION:
+    {question}
 
-            # Step 3: Call Groq API
+    ANSWER (with inline citations):"""
+
+            # Call Groq API
             response = self.groq_client. chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[
-                    {"role": "system", "content":  system_prompt},
-                    {"role": "user", "content":  user_prompt}
+                    {
+                        "role": "system",
+                        "content": "You are a helpful assistant that answers questions based on document context.  Always include inline citations [1], [2], etc. when referencing sources."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
                 ],
                 temperature=0.3,
-                max_tokens=500
+                max_tokens=800
             )
             
-            # Step 4: Extract the answer
-            ai_answer = response.choices[0].message.content
+            answer_text = response.choices[0]. message.content. strip()
             
+            # Return with sources
             return {
                 "status": "success",
                 "question": question,
-                "answer": ai_answer,
-                "sources": sources,
-                "model_used": "llama-3.3-70b-versatile (Groq)",
-                "context_chunks_used": top_k
+                "answer":  answer_text,  # Now includes inline citations like [1], [2]
+                "sources": sources,  # Still include the source list
+                "source_references": source_references,  # Numbered list for display
+                "model_used": "llama-3.3-70b-versatile",
+                "context_used": True,
+                "used_rag": True
             }
         
         except Exception as e: 
@@ -410,7 +423,7 @@ Please provide a clear and accurate answer based on the context above."""
                 "status":  "error",
                 "message":  str(e)
             }
-  
+    
 
 class Intent_Classifier_Agent:
     """
@@ -597,10 +610,6 @@ async def test_ai():
 
 @app.post("/ai-ask")
 async def ai_ask_question(query: QueryRequest):
-    """
-    Intelligent question answering with intent classification
-    Routes to RAG or general responses based on query intent
-    """
     try:
         # Step 1: Classify intent
         classification = intent_classifier.classify_intent(query.question)
@@ -608,14 +617,12 @@ async def ai_ask_question(query: QueryRequest):
         
         # Step 2: Route based on intent
         if intent in ["greeting", "general_query"]:
-            # Don't use RAG for greetings or general queries
             return intent_classifier.get_general_response(query.question, intent)
         
         else:  # intent == "document_query"
-            # Use RAG for document-related questions
             rag_response = generation_agent.generate_answer(query.question, query.top_k)
             
-            # Add intent information to response
+            # Add intent information
             if rag_response["status"] == "success":
                 rag_response["intent"] = "document_query"
                 rag_response["used_rag"] = True  # type: ignore
