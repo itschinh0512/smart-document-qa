@@ -171,6 +171,133 @@ class Retrieval_Agent:
             "collection_name": self.collection.name,
             "embedding_provider": "LangChain"
         }
+    
+    def list_documents(self):
+        """
+        List all uploaded documents with their metadata
+        """
+        try: 
+            if self.collection.count() == 0:
+                return {
+                    "status": "success",
+                    "message": "No documents uploaded yet",
+                    "documents": [],
+                    "total_documents": 0,
+                    "total_chunks": 0
+                }
+            
+            # Get all items from collection
+            results = self.collection.get()
+            
+            # Extract unique documents
+            documents = {}
+            for i, metadata in enumerate(results['metadatas']):
+                doc_name = metadata. get('document', 'Unknown')
+                page = metadata.get('page', 0)
+                
+                if doc_name not in documents: 
+                    documents[doc_name] = {
+                        "document_name": doc_name,
+                        "pages": [],
+                        "total_chunks": 0
+                    }
+                
+                if page not in documents[doc_name]["pages"]:
+                    documents[doc_name]["pages"].append(page)
+                
+                documents[doc_name]["total_chunks"] += 1
+            
+            # Sort pages
+            for doc in documents.values():
+                doc["pages"].sort()
+                doc["page_count"] = len(doc["pages"])
+            
+            return {
+                "status": "success",
+                "documents": list(documents.values()),
+                "total_documents": len(documents),
+            }
+        
+        except Exception as e: 
+            return {
+                "status":  "error",
+                "message":  str(e)
+            }
+    
+    def delete_document(self, document_name: str):
+        """
+        Delete a specific document by name
+        """
+        try: 
+            if self.collection.count() == 0:
+                return {
+                    "status": "error",
+                    "message": "No documents to delete"
+                }
+            
+            # Get all items
+            results = self.collection.get()
+            
+            # Find chunks belonging to this document
+            chunks_to_delete = []
+            for i, metadata in enumerate(results['metadatas']):
+                if metadata.get('document') == document_name:
+                    chunks_to_delete.append(results['ids'][i])
+            
+            if not chunks_to_delete:
+                return {
+                    "status":  "error",
+                    "message": f"Document '{document_name}' not found"
+                }
+            
+            # Delete the chunks
+            self.collection.delete(ids=chunks_to_delete)
+            
+            return {
+                "status": "success",
+                "message": f"Deleted document:  {document_name}",
+                "chunks_deleted": len(chunks_to_delete),
+                "remaining_chunks": self.collection.count()
+            }
+        
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+    
+    def clear_all_documents(self):
+        """
+        Delete ALL documents from the collection
+        """
+        try:
+            if self. collection.count() == 0:
+                return {
+                    "status": "success",
+                    "message": "No documents to clear",
+                    "chunks_deleted": 0
+                }
+            
+            chunks_count = self.collection.count()
+            
+            # Get all IDs and delete them
+            results = self.collection.get()
+            all_ids = results['ids']
+            
+            self.collection.delete(ids=all_ids)
+            
+            return {
+                "status": "success",
+                "message": "All documents cleared successfully",
+                "chunks_deleted":  chunks_count,
+                "remaining_chunks": self.collection.count()
+            }
+        
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": str(e)
+            }
 
 class Generation_Agent:
     def __init__(self, groq_client, retrieval_agent):
@@ -283,7 +410,101 @@ Please provide a clear and accurate answer based on the context above."""
                 "status":  "error",
                 "message":  str(e)
             }
+  
+
+class Intent_Classifier_Agent:
+    """
+    Classifies user intent to route queries appropriately
+    Prevents unnecessary RAG operations for non-document questions
+    """
+    def __init__(self, groq_client):
+        self.groq_client = groq_client
+    
+    def classify_intent(self, question: str):
+        """
+        Classify if the question is: 
+        - 'document_query':  Question about uploaded documents (use RAG)
+        - 'general_query': General question not about documents (don't use RAG)
+        - 'greeting': Greeting or chitchat
+        """
+        try:
+            classification_prompt = f"""You are an intent classifier for a document Q&A system. 
+
+Classify the following user question into ONE of these categories:
+1. "document_query" - Questions about document content, asking to summarize, explain, or find information IN documents
+   Examples: "What is in section 3? ", "Summarize the document", "What does page 5 say about X?"
+   
+2. "general_query" - General knowledge questions (weather, math, current events, definitions) NOT about documents
+   Examples: "What's the weather? ", "What is machine learning?", "Who is the president?"
+   
+3. "greeting" - Greetings, thanks, or casual conversation
+   Examples: "Hello", "Hi", "Thanks", "How are you?"
+
+User question: "{question}"
+
+Respond with ONLY ONE WORD:  either "document_query", "general_query", or "greeting"
+Do not include any explanation."""
+
+            response = self.groq_client.chat.completions. create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": "You are an intent classifier.  Respond with only one word: document_query, general_query, or greeting."},
+                    {"role": "user", "content": classification_prompt}
+                ],
+                temperature=0.1,  # Low temperature for consistent classification
+                max_tokens=10
+            )
+            
+            intent = response.choices[0].message. content.strip().lower()
+            
+            # Validate intent
+            valid_intents = ["document_query", "general_query", "greeting"]
+            if intent not in valid_intents:
+                # Default to document_query if unclear (safe fallback)
+                intent = "document_query"
+            
+            return {
+                "status": "success",
+                "question": question,
+                "intent":  intent
+            }
         
+        except Exception as e:
+            # If classification fails, default to document_query (safe fallback)
+            return {
+                "status": "success",
+                "question": question,
+                "intent": "document_query",
+                "note": f"Classification failed: {str(e)}, defaulting to document query"
+            }
+    
+    def get_general_response(self, question: str, intent: str):
+        """
+        Generate appropriate response for non-document queries
+        """
+        if intent == "greeting":
+            return {
+                "status": "success",
+                "question": question,
+                "answer": "Hello! 👋 I'm a document Q&A assistant. Please upload a PDF document, and I can answer questions about its content.  What would you like to know? ",
+                "intent": "greeting",
+                "used_rag": False
+            }
+        
+        elif intent == "general_query":
+            return {
+                "status": "success",
+                "question": question,
+                "answer": "I'm specialized in answering questions about uploaded documents. I cannot answer general knowledge questions like weather, current events, or facts not in your documents. Please ask me something about the PDF you've uploaded, or upload a new document! ",
+                "intent": "general_query",
+                "used_rag": False
+            }
+        
+        else:
+            return None  # Should use RAG
+
+
+
 app = FastAPI(title="Document Q&A Service")
 
 app.add_middleware(
@@ -323,6 +544,9 @@ retrieval_agent = Retrieval_Agent(
     embedding_model=embedding_model,
     chunker=text_splitter
 )
+
+# Initialize Intent Classifier Agent (NEW!)
+intent_classifier = Intent_Classifier_Agent(groq_client=groq_client)
 
 # Initialize Generation Agent
 generation_agent = Generation_Agent(
@@ -374,9 +598,43 @@ async def test_ai():
 @app.post("/ai-ask")
 async def ai_ask_question(query: QueryRequest):
     """
-    Ask a question and get an AI-generated answer (powered by Groq)
+    Intelligent question answering with intent classification
+    Routes to RAG or general responses based on query intent
     """
-    return generation_agent.generate_answer(query.question, query.top_k)
+    try:
+        # Step 1: Classify intent
+        classification = intent_classifier.classify_intent(query.question)
+        intent = classification["intent"]
+        
+        # Step 2: Route based on intent
+        if intent in ["greeting", "general_query"]:
+            # Don't use RAG for greetings or general queries
+            return intent_classifier.get_general_response(query.question, intent)
+        
+        else:  # intent == "document_query"
+            # Use RAG for document-related questions
+            rag_response = generation_agent.generate_answer(query.question, query.top_k)
+            
+            # Add intent information to response
+            if rag_response["status"] == "success":
+                rag_response["intent"] = "document_query"
+                rag_response["used_rag"] = True  # type: ignore
+            
+            return rag_response
+    
+    except Exception as e: 
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+@app.post("/classify-intent")
+async def classify_intent(query: QueryRequest):
+    """
+    Debug endpoint to see how questions are classified
+    Useful for testing and demonstration
+    """
+    return intent_classifier.classify_intent(query.question)
 
 @app.get("/ping")
 def ping():
@@ -389,7 +647,45 @@ def ping():
         "timestamp": str(uuid.uuid4())
     }
 
+@app.get("/documents")
+def list_documents():
+    """
+    List all uploaded documents with metadata
+    Shows document names, page counts, and chunk counts
+    """
+    return retrieval_agent.list_documents()
+
+@app.delete("/documents/{document_name}")
+def delete_document(document_name: str):
+    """
+    Delete a specific document by name
+    Example: DELETE /documents/my-file.pdf
+    """
+    return retrieval_agent.delete_document(document_name)
+
+@app.delete("/documents")
+def clear_all_documents():
+    """
+    Delete ALL documents from the system
+    Use with caution! 
+    """
+    return retrieval_agent.clear_all_documents()
+
+@app.get("/documents/count")
+def document_count():
+    """
+    Quick endpoint to get document and chunk counts
+    """
+    docs_info = retrieval_agent.list_documents()
+    if docs_info["status"] == "success":
+        return {
+            "status": "success",
+            "total_documents": docs_info. get("total_documents", 0),
+            "total_chunks": docs_info.get("total_chunks", 0)
+        }
+    return docs_info
+
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("PORT", 8000))
+    port = int(os.getenv("PORT", 7860))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
